@@ -12,9 +12,7 @@ JMM通过主内存与每个线程的本地内存之间交互，来为java程序�
 
 
 
-
-
-## 1.并发编程的挑战
+## 并发编程的挑战
 
 ### 1.1 上下文切换(Context Switch)
 
@@ -101,7 +99,7 @@ volatile的写操作会把前面**所有**的普通共享变量的新值刷新�
 
 volatile的读操作会从本地线程内存清除后面**所有**的普通共享变量，促使下面的代码在使用共享变量的时候从主内存中获取新值。
 
-## 2.volatile
+## volatile
 
 ### 基本理论
 
@@ -166,7 +164,7 @@ class VolatileExample {
 
 
 
-## 3.synchronized
+## synchronized
 
 ### 加锁对象
 
@@ -224,7 +222,7 @@ class MonitorExample {
 
 当线程获取锁时，JMM会把该线程对应的本地内存置为无效。从而使得被监视器保护的临界区代码必须从主内存中读取共享变量。上面这句话是“Java并发编程的艺术书”中的一句话，但我的理解这句话不准确，**准确的定义：JMM会把该线程执行到synchronized(lock){涉及到共享变量}对应的本地内存置为无效。从而使得被监视器保护的临界区代码必须从主内存中读取共享变量。**
 
-## 4.atomic
+## atomic
 
 ### 基本理论
 
@@ -399,7 +397,7 @@ tomcat主线程(线程A)启动，调用DispatcherServlet.init()方法初始化�
 
 ![](D:/github/zhangdberic/java/trunk/images/happens-before-join1.jpg)
 
-## 延时初始化
+## 延时初始化和单实例
 
 ### 基于volatile实现
 
@@ -657,7 +655,7 @@ MyThread线程可以正确的获取到456，而如果你把InheritableThreadLoca
 
 
 
-## 1.Lock
+## Lock
 
 Lock接口和synchronized关键字的区别
 
@@ -667,7 +665,7 @@ Lock接口和synchronized关键字的区别
 
 3.超时获取锁，在指定的时间内获取锁，获取不到则返回。
 
-### 1.1 Lock接口
+### Lock接口
 
 lock太常用了，建议把下面的方法都背下来
 
@@ -677,12 +675,14 @@ lock太常用了，建议把下面的方法都背下来
 | void lockInterruptibly() throws InterruptedException         | 获取锁的过程可中断                                           |
 | boolean tryLock();                                           | 尝试获取锁，调用该方法后立即返回，能获取到则返回true,不能返回false。 |
 | boolean tryLock(long timeout,TimeUnit unit) throws InterruptedException; | 尝试在timeout时间内获取锁，如果不能获取则当前线程会被阻塞timeout时间，阻塞的时间内可以响应中断。 |
-| void unlock();                                               | 释放锁，一般在finally{unlock();}中执行，保证锁被释放。       |
+| void unlock();                                               | 释放锁，应在finally{unlock();}中执行，保证锁被释放。         |
 | Condition newCondition();                                    | 创建一个等待通知组件，同线程的wait()和notify()，但使用更简单。 |
 |                                                              |                                                              |
 |                                                              |                                                              |
 
-### 1.1.1 ReentrantLock(可重入锁)
+### ReentrantLock(可重入锁)
+
+注意：lock()方法，应该在try的上面，unlock()方法在finally中包装锁任何情况下释放锁。如果你使用ReentrantLock同synchronized语义一样(阻塞等待)，建议还是使用synchronized，因为synchronized优化的空间更大(jdk团队对synchronzied在进行持续的优化)。
 
 ```java
 class ReentrantLockExample {
@@ -710,9 +710,9 @@ class ReentrantLockExample {
 }
 ```
 
-#### 1.1.1.1 可重入
+#### 可重入
 
-线程A已经调用lock()方法获取到了锁，如果线程A再次调用lock()则非阻塞直接进入锁，代码：
+线程A已经调用lock()方法获取到了锁，如果线程A再次调用lock()则**非阻塞**直接进入锁，代码：
 
 其内部有一个计数器，重入一次加1，退出一次减1，计数器为0，则释放当前线程持有的锁。
 
@@ -735,7 +735,7 @@ class ReentrantLockExample {
     }
 ```
 
-#### 1.1.1.2 公平锁和非公平锁
+#### 公平锁和非公平锁
 
 公平锁：在等待时间内最长的线程最优先获取锁。
 
@@ -743,9 +743,9 @@ class ReentrantLockExample {
 
 公平锁没有非公平说效率高。但是，并不是任何场景都以TPS为唯一指标，公平锁能减少”饥饿“发生的概率，等待越久的线程越能够优先获取到锁。
 
-### 1.1.3 ReentrantReadWriteLock(读写锁)
+### ReentrantReadWriteLock(读写锁)
 
-读写锁在同一个时刻可以允许多个读线程访问，但是写线程访问时，所有的读线程和其他写线程均被阻塞。
+读写锁在同一个时刻可以允许多个读线程访问(共享锁)，但是写线程访问(独占锁)时所有的读线程和其他写线程均被阻塞。
 
 读写锁维护了一对锁，一个读锁，一个写锁，通过分离读锁和写锁，提升并发性。
 
@@ -785,9 +785,11 @@ public class Cache {
 }
 ```
 
-#### 1.1.4 等待/通知
+### 等待/通知
 
-基于ReentrantLock和Condition实现，等待/通知，其比Java自带的等待/通知实现简单多了。
+基于ReentrantLock和Condition实现，等待/通知，和Java原生的wait()和notify()使用上差不多。
+
+注意：只要是由wait语义的地方，就应该使用while来循环条件，不能使用if。
 
 ```java
 final Lock lock = new ReentrantLock();
@@ -796,9 +798,9 @@ Condition condition1 = lock.condition();
 public void await(){
     lock.lock();
     try{
-        System.out.println("wait start.")
-        condition1.await(); // 进入阻塞等待，待通知唤醒
-        System.out.println("wait end.")
+        while(条件不满足) {
+           condition1.await();
+        }
     }finally{
         lock.unlock();
     }
@@ -817,9 +819,9 @@ public void signal(){
 
 
 
-## 3.Concurrent的应用
+## 调用超时(call timeout)
 
-### 3.1 等待超时模式
+下面是一个简单的模式，基于单线程，如果使用比较频繁的情况下，可以使用线程池来实现。
 
 ```java
 public class WaitTimeout {
@@ -868,4 +870,163 @@ public class WaitTimeout {
 
 }
 ```
+
+## ConcurrentHashMap
+
+ConcurrentHashMap是线程安全且高效的HashMap。
+
+新的jdk1.8的ConcurrentHashMap实现，相对于jdk1.6的ConcurrentHashMap有很大的改进，例如：
+
+Jdk1.6的Segment已经不再被使用，取而代之的是更高效的Node级别锁，操作那个Node(元素)，就对那个元素加锁。
+
+HashEntry不存在了，取而代之的是Node。
+
+哈希碰撞的时候，不在单纯的使用链表结构来存储相同hash值的元素了，而是使用链表或红黑树，一旦链表长度大于等于8马上转换为红黑树结构，链表用于小数据查询，红黑树用于大数据查询。
+
+大量的使用volatile和sun.misc.Unsafe来操作table(数组)内的Node数据。
+
+不在使用ReentrantLock而是使用synchronized来对Node加锁，synchronized优化力度更大，锁定Node锁定范围更小。
+
+### hash定位
+
+计算key存放到数组中的位置。
+
+下面的代码摘取之ConcurrentHashMap的putVal方法，
+
+n为数组(table)长度；
+
+hash为spread(int h)方法计算后的hash值(下面会讲解)；
+
+i为计算后数组的索引位置；
+
+很明显通过&运算(两个操作数中，二进制位都为1，结果才为1，否则结果为0)，这样能保证计算后的值一定在(n-1)的数值范围内。
+
+```java
+i = (n - 1) & hash
+```
+
+
+
+### hash计算(再散列)
+
+实现方式如下：
+
+```
+static final int spread(int h) {
+    return (h ^ (h >>> 16)) & HASH_BITS;
+}
+```
+
+为了避免不太好的Key的hashCode值(散列不够)，它通过如上方法重新计算得到Key的最终哈希值。不同的是，Java 8的ConcurrentHashMap作者认为引入红黑树后，即使哈希冲突比较严重，寻址效率也足够高，所以作者并未在哈希值的计算上做过多设计，只是将Key的hashCode值与其高16位作异或并保证最高位为0（从而保证最终结果为正整数）。
+
+**解释一下上面的代码**
+
+核心思想，作者认为，**绝大多数情况下哈希表长度(n)一般都小于2^16即小于65536，如果小于65536那么n的高16位一定是零**,执行上面的**hash定位[i = (n - 1) & hash]**后不管你hash值是什么，通过&运算后高16位还是0，hash值的高16位被浪费了，其没有参与到hash计算，上面的**再哈希**方法，目的就是让hash的高16位也参与到计算来，尽量减少哈希碰撞。
+
+h >>> 16，无符号右移16位，前面补零，意味着丢弃h的低16位，只保留h的高16位。
+
+例如：h等于12345678，二进制(0000 0000 1011 1100 0110 0001 0100 1110)，无符号右移16位，前面补零后值为188，二进制(0000 0000 0000 0000 0000 0000 1011 1100)。
+
+12345678：0000 0000 1011 1100 0110 0001 0100 1110
+
+​           188：0000 0000 0000 0000 0000 0000 1011 1100
+
+h ^ (h >>> 16)，h和自己高16位异或(相等位值则为0，不等位为1)，这样高16后也参与到了计算，例如：h等于12345678。
+
+12345678：0000 0000 1011 1100 0110 0001 0100 1110
+
+​           188：0000 0000 0000 0000 0000 0000 1011 1100
+
+12345842：0000 0000 1011 1100 0110 0001 1111 0010  异或后的值
+
+(h ^ (h >>> 16)) & HASH_BITS，这里的HASH_BITS为0x7fffffff，计算后为无符号正整数，因为第1位为0，**与运算**后也一定是0，第1位为零就是无符号正整数。
+
+### 碰撞后是链表存储还是红黑树存储
+
+ 链表内的元素个数大于等于8时，转换结构到红黑树。
+
+### 锁
+
+put、replace操作对操作的Node加锁(synchronized)，get、constant操作无锁，remove操作对操作的Node加锁(synchronized)。
+
+### size()和isEmpty()
+
+isEmpty()实现基于size()相对于size()>0没有任何优势，size()在jdk1.8中已经是已经没有锁了，统计很快。
+
+
+
+## Queue
+
+### BlockingQueue(阻塞队列)
+
+阻塞队列常用于生产者和消费者的场景，生产者是向队列里添加元素的线程，消费者是从队列里取元素的线程。阻塞队列就是生产者用来存放元素、消费者用来获取元素的容器。
+
+当队列满或者队列为空时，下表是队列操作方法，处理方式： 
+
+| 方法\处理方式 | 抛出异常  | 返回特殊值 | 一直阻塞 | 超时退出           |
+| ------------- | --------- | ---------- | -------- | ------------------ |
+| 插入方法      | add(e)    | offer(e)   | put(e)   | offer(e,time,unit) |
+| 移除方法      | remove()  | poll()     | take()   | poll(time,unit)    |
+| 检查方法      | element() | peek()     | 不可用   | 不可用             |
+
+- 抛出异常：是指当阻塞队列满时候，再往队列里插入元素，会抛出IllegalStateException(“Queue full”)异常。当队列为空时，从队列里获取元素时会抛出NoSuchElementException异常 。
+- 返回特殊值：插入方法会返回是否成功，成功则返回true。移除方法，则是从队列取出一个元素，如果没有则返回null
+- 一直阻塞：当阻塞队列满时，如果生产者线程往队列里put元素，队列会一直阻塞生产者线程，直到队列可用或者响应中断退出。当队列空时，如果消费者线程试图从队列里take元素，队列也会阻塞消费者线程，直到队列可用。
+- 超时退出：当阻塞队列满时，队列会阻塞生产者线程一段时间，如果超过指定的时间，生产者线程就会退出。
+
+**ArrayBlockingQueue(数组实现有界阻塞队列)**
+
+ArrayBlockQueue是一个用数组实现的有界阻塞队列。此队列按照先进先出(FIFO)的原则对元素进行排序。
+
+默认是线程非公平性访问，如果要创建一个公平性访问队列，如下：
+
+```java
+ArrayBlockingQueue fairQueue = new ArrayBlockingQueue(1000,true);
+```
+
+**LinkedBlockingQueue(链表实现有界阻塞队列)**
+
+LinkedBlockingQueue是一个用链表实现的有界阻塞队列。此队列的默认和最大长度为Integer.MAX_VALUE。此队列按照先进先出(FIFO)的原则对元素进行排序。
+
+**PriorityBlockingQueue(优先级的无界阻塞队列)**
+
+存储队列的元素采用自然升序排序，也可以使用自定义的compareTo()方法指定元素排序规则，或者在初始化PriorityBlockingQueue时，指定构造参数Comparator来进行排序。需要注意：不能保证同有效级元素的顺序。这个PriorityBlockingQueue实现了多个生产者线程并发存放无序的元素，但进入队列后就变成有序的了，消费者可以顺序的从队列中获取元素。
+
+**DelayQueue(延时的无界阻塞队列)**
+
+队列中的元素必须实现Delayed接口，其实现了getDelay()方法，该方法返回当前元素还需要延时多长时间，单位是纳秒。还是需要实现compareTo(Delayed other)方法来指定元素的顺序，例如：让延时最长的排在队列的末尾。
+
+其典型的用法：
+
+1.延时处理程序，生产者存放实现Delayed接口元素到队列，消费者阻塞等待延时到期后取出元素执行内部方法；
+
+2.缓存过期处理，创建缓存对象时，包装缓存对象实现Delayed接口并存放到队列，缓存销毁消费者阻塞等待过期的缓存对象；
+
+**SynchronousQueue(不存储元素的阻塞队列)**
+
+每一个put操作必须等待一个take操作，否则不能继续添加元素。中间没有介质来存放队列数据。
+
+**LinkedTransferQueue(适用于传送数据的队列)**
+
+多了两个方法：
+
+transfer方法判断消费者是否可用如果可用则直接把元素传送到给消费者，否则把元素存放到队列介质中阻塞等待消费者有空来消费。
+
+tryTransfer方法区别于transfer方法无论消费者是否接收，方法立即返回，而transfer方法是必须等待到消费者消费才返回。
+
+**LinkedBlockingDeque(双向链表阻塞队列)**
+
+可以从队列的两端插入和移除元素，对比上面的阻塞队列其多了一个操作队列入口，在多线程同时入队的时候，也就减少了一半的竞争。
+
+如果要实现双向队列，最好使用xxxFirst，xxxLast字样方法操作，其实现了BlockingQueue接口的所有语义，例如：
+
+addFirst、addLast，offerFirst、offerLast，peekFirst、peekLast等方法，以first结尾的方法，表示插入、获取或者移除在队列的头部操作，而反之last结尾的方法在队列的尾部操作。
+
+典型用法：
+
+正常情况下生产者put到元素到队列，消费者从队列中take元素，都是按照时间顺序完成。但突然间来了一个重要的元素，需要优先处理，则可以使用addLast放到队列尾部，这个元素就会优先被take出并处理。
+
+
+
+
 
