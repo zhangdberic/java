@@ -222,44 +222,7 @@ class MonitorExample {
 
 当线程获取锁时，JMM会把该线程对应的本地内存置为无效。从而使得被监视器保护的临界区代码必须从主内存中读取共享变量。上面这句话是“Java并发编程的艺术书”中的一句话，但我的理解这句话不准确，**准确的定义：JMM会把该线程执行到synchronized(lock){涉及到共享变量}对应的本地内存置为无效。从而使得被监视器保护的临界区代码必须从主内存中读取共享变量。**
 
-## atomic
-
-### 基本理论
-
-原子(atomc)本意是不能被进一步分割的最小粒子，而原子操作，不可被中断的一个或一系列操作。
-
-### CAS
-
-典型的CAS(Compare And Swap)：CAS操作需要输入两个数值，一个旧值（期望操作前的值）和一个新值，在操作期间先比较旧值，如果没有发现变化，才交换为新值，发生了变化则不交换。
-
-java实现CAS的核心方法：
-
-```java
-sun.misc.Unsafe类
-
-public final native boolean compareAndSwapInt(Object o, long offset, int expected int x);
-```
-
-
-
-### 自旋
-
-```java
-private AtomicInteger atomicI = new AtomicInteger(0);
-
-/** 自旋 */
-private void safeCount() {
-   for(;;){
-     int i = atomicI.get();
-     boolean suc = atomicI.compareAndSet(i,++i);
-     if(suc){
-       break;
-     }
-   }
-}
-```
-
-## final
+### final
 
 ### 基本理论
 
@@ -1026,7 +989,147 @@ addFirst、addLast，offerFirst、offerLast，peekFirst、peekLast等方法，�
 
 正常情况下生产者put到元素到队列，消费者从队列中take元素，都是按照时间顺序完成。但突然间来了一个重要的元素，需要优先处理，则可以使用addLast放到队列尾部，这个元素就会优先被take出并处理。
 
+## Atomic
+
+### 基本理论
+
+原子(atomic)本意是不能被进一步分割的最小粒子，而原子操作是不可被中断的一个或一系列操作。
+
+### CAS
+
+典型的CAS(Compare And Swap)：CAS操作需要输入两个数值，一个旧值（期望操作前的值）和一个新值，在操作期间先比较旧值，如果没有发现变化，才交换为新值，发生了变化则不交换。
+
+java实现CAS的核心方法：
+
+sun.misc.Unsafe
+
+```java
+public final native boolean compareAndSwapInt(Object o, long offset, int expected int x);
+```
+
+### 原子更新基本类型
+
+AtomicBoolean：原子更新布尔类型；
+
+AtomicInteger：原子更新整形；
+
+AtomicLong：原子更新长整形；
+
+以上三个方法操作基本相同，我们以AtomicInteger举例子说明：
+
+int addAndGet(int delta)，原子相加参数delta并返回结果；
+
+boolean compareAndSet(int expect,int update)，原子比较期望值，如果当期值等于期望值，则设置为新值；
+
+int getAndIncrement()，原子加1并返回结果；
+
+void lazySet(int newValue)，最终会设置为newValue，但不保证这个方法调用后马上就更新值；
+
+### 原子更新数组
+
+AtomicIntegerArray、AtomicLongArray、AtomicReferenceArray。
+
+用AtomicIntegerArray来举例子：
+
+int addAndGet(int i,int delta)：以原子方式操作数组中元素值，参数i为索引下标。
+
+boolean compareAndSet(int i,int expect,int update)：以原子方式操作数组中的元素值，参数i为索引下标。
+
+**注意：**数组通过构造方法传递进去，然后AtomicIntegerArray会将当期数组复制一份，所以当对AtomicIntegerArray内部数组元素进行操作修改时，不影响传入数组。
+
+### 原子更新引用
+
+AtomicReference：原子更新引用类型；
+
+```java
+public static AtomicReference<User> atomicUserRef = new AtomicReference<User>();
+
+public static void main(String[] args){
+  User user = new User("conan",15);
+  atomicUserRef.set(user);
+  User updateUser = new User("Shinichi",17);
+  atomicUserRef.compareAndSet(user,updateUser);
+  System.out.println(atomicUserRef.get().getName());
+}
+```
+
+AtomicReferenceFieldUpdater：原子更新引用类型里的字段；
+
+注意：原子更新的字段必须修饰为volaitle。
+
+```java
+class User {
+    private volatile String name;
+}
+
+AtomicReferenceFieldUpdater<User,String> updater=AtomicReferenceFieldUpdater.newUpdater(User.class,String.class,"name");
+private volatile User user = new User("heige");
+
+public static void main(String[] args){
+    boolean isSuccess=updater.compareAndSet(user,"heige","jiaojie");
+    System.out.println("修改后的name为:"+updater.get());
+    
+}
+```
+
+AtomicIntegerFieldUpdater：原子更新整形的字段更新器；
+
+注意：原子更新的字段必须修饰为volaitle。
+
+```java
+class User {
+    private volatile int old;
+}
+
+AtomicIntegerFieldUpdater<User> updater=AtomicIntegerFieldUpdater.newUpdater(User.class,"old");
+private volatile User user = new User("10");
+
+public static void main(String[] args){
+    updater.getAndIncrement(user); // 原子对user实例变量的old属性加1并返回结果
+}
+
+```
+
+AtomicLongFieldUpdater：原子更新长整形的字段更新器；
+
+注意：原子更新的字段必须修饰为volaitle。
+
+同上AtomicIntegerFieldUpdater。
 
 
 
 
+
+### ABA问题
+
+AtomicMarkableReference：原子更新带有标记为的引用类型。可以原子更新一个布尔类型标记位和引用类型
+
+
+
+
+
+
+
+### 自旋
+
+我们通过分析getAndIncrement()方法的源码来理解一下自旋:
+
+线程不断的从atomic变量中取出当前值(原值)，然后加1(新值)，再进行CAS比较如果原值没有变(其它的线程没有更新)，则用新值替换，否则for循环重头来。
+
+```java
+public final int getAndIncrement(){
+    for(;;){
+        int current = get();
+        int next = current + 1;
+        if (compareAndSet(current,next)){
+            return current;
+        }
+    }
+}
+
+public final boolean compareAndSet(int expect,int update){
+    return unsafe.compareAndSwapInt(this, valueOffset, expect, update);
+}
+```
+
+### 
