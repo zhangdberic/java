@@ -1053,6 +1053,8 @@ public static void main(String[] args){
 }
 ```
 
+### 原子更新对象字段(field)
+
 AtomicReferenceFieldUpdater：原子更新引用类型里的字段；
 
 注意：原子更新的字段必须修饰为volaitle。
@@ -1096,19 +1098,30 @@ AtomicLongFieldUpdater：原子更新长整形的字段更新器；
 
 同上AtomicIntegerFieldUpdater。
 
-
-
-
-
 ### ABA问题
 
-AtomicMarkableReference：原子更新带有标记为的引用类型。可以原子更新一个布尔类型标记位和引用类型
+ABA问题：CAS算法实现一个重要前提需要取出内存中某时刻的数据，而在下时刻比较并替换，那么在这个时间差类会导致数据的变化。A还是A，但这个A从时间轴上看已近不是当初的A了，就好比说，这个人还是黑哥，但已近不是10年前的黑哥了，这10年很大的变化。
 
+　　**举个例子**：一个用单向链表实现的堆栈，栈顶为A，这时线程T1已经知道A.next为B，然后希望用CAS将栈顶替换为B，在T1执行之前，线程T2介入，将A、B出栈，再pushD、C、A。此时轮到线程T1执行CAS操作，检测发现栈顶仍为A，所以CAS成功，栈顶变为B，但实际上B.next为null。具体如下图
 
+| 线程T1 | 线程T2 | 线程T1 |
+| ------ | ------ | ------ |
+| A      | A      | B      |
+| B      | C      |        |
+|        | D      |        |
 
+如何解决，加入版本号，就好比说10年前的黑哥是黑哥30，现在的黑哥是黑哥40，这样你就区别开了。
 
+Atomic的实现：
 
+加入版本号，ABA变成了，A1-B2->A3
 
+AtomicStampedReference实现上面的加版本号，例如：
+
+```java
+static AtomicStampedReference<Integer> stampedReference = new AtomicStampedReference<>(0,1);
+stampedReference.compareAndSet(stampedReference.getReference(),stampedReference.getReference()+1,stampedReference.getStamp(),stampedReference.getStamp()+1);
+```
 
 ### 自旋
 
@@ -1132,4 +1145,341 @@ public final boolean compareAndSet(int expect,int update){
 }
 ```
 
-### 
+## CountDownLatch
+
+### 理论
+
+CountDownLatch的构造函数接收一个int参数作为计数器，如果你想等待N个点完成，就传入N。
+
+当前我们调用CountDownLatch的countDown方法时，N就会减1，CountDownLatch的await方法会阻塞当前线程，直到N变为零。
+
+### 用法
+
+#### 主线程阻塞等待子线程任务完成
+
+例如：主线程阻塞等待两个子线程任务完成；
+
+```java
+final CountDownLatch latch = new CountDownLatch(2);
+
+public static void main(String[] args){
+    
+   new Thread(new Runnable(){
+       public void run(){
+           // 任务代码1
+           System.out.println("task1 completed.")
+           latch.countDown();
+       }
+   }).start();
+    
+   new Thread(new Runnable(){
+       public void run(){
+           // 任务代码2
+           System.out.println("task2 completed.")
+           latch.countDown();
+       }
+   }).start();
+    
+   // 主线程阻塞等待子任务都完成 
+   latch.await(); 
+   System.out.println("all task completed.")
+}
+
+```
+
+## CyclicBarrier
+
+### 理论
+
+让一组线程达到一个屏障（也可以叫同步点）时被阻塞，直到最后一个线程到达屏障时，屏障才会开门，所有被阻塞的线程才会继续运行。
+
+```java
+final CyclicBarrier cyclicBarrier = new CyclicBarrier(N); // 构造参数N表示屏障阻塞的线程数量
+cyclicBarrier.await(); // 通知已经达到了屏障，然后当前线程被阻塞
+```
+
+### 用法
+
+#### 并发测试
+
+让N个线程并发的执行操作，你可以在每个线程的run()方法开始部分加入了cyclicBarrier.await()，这样只有最后线程线程达到屏障后，才会开始执行所有的线程的代码。
+
+#### 异步多线程计算
+
+CyclicBarrier可以用于多线程计算数据，最后合并计算结果的场景。例如，用一个Excel保存了用户所有银行流水，每个Sheet保存一个账户近一年的每笔银行流水，现在需要统计用户的日均银行流水，先用多线程处理每个sheet里的银行流水，都执行完之后，得到每个sheet的日均银行流水，最后，再用barrierAction用这些线程的计算结果，计算出整个Excel的日均银行流水。
+
+这里的关键点是，CyclicBarrier构造方法的第2个参数，其用于达到屏障后执行一个Runnable的run()方法，上面的例子，则用于最后的汇总计算。
+
+```java
+publicclass BankWaterService implements Runnable { 
+	/*** 创建4个屏障，处理完之后执行当前类的run方法 */ 
+	private CyclicBarrier c = new CyclicBarrier(4, this); 
+	/*** 假设只有4个sheet，所以只启动4个线程 */ 
+	private Executor executor = Executors.newFixedThreadPool(4); 
+	/*** 保存每个sheet计算出的银流结果 */ 
+	private ConcurrentHashMap<String, Integer>sheetBankWaterCount = new ConcurrentHashMap<String, Integer>(); 
+	private void count() { 
+		for (inti = 0; i< 4; i++) { 
+			executor.execute(new Runnable() { 
+				@Override 
+				publicvoid run() { 
+					// 计算当前sheet的银流数据，计算代码省略 
+					sheetBankWaterCount .put(Thread.currentThread().getName(), 1); 
+					// 银流计算完成，插入一个屏障 
+					try {
+						c.await(); 
+					} catch (InterruptedException | BrokenBarrierException e){ 
+						e.printStackTrace(); 
+					}
+				} 
+			}); 
+		} 
+	} 
+	@Override 
+	publicvoid run() { 
+		intresult = 0; // 汇总每个sheet计算出的结果 
+		for (Entry<String, Integer>sheet : sheetBankWaterCount.entrySet()) { 
+			result += sheet.getValue(); 
+		}
+		// 将结果输出 
+		sheetBankWaterCount.put("result", result); 
+		System.out.println(result); 
+	}
+
+	publicstaticvoid main(String[] args) { 
+		BankWaterService bankWaterCount = new BankWaterService(); 
+		bankWaterCount.count(); 
+	} 
+}
+```
+
+## Semaphore
+
+### 理论
+
+Semaphore（信号量）是用来控制同时访问特定资源的线程数量，它通过协调各个线程，以保证合理的使用公共资源。
+
+Semaphore可以用于做流量控制，特别是公共资源有限的应用场景，比如数据库连接。
+
+### 用法
+
+#### 公共资源访问数量控制
+
+定义了10个信号，但有30个线程在争夺，如果这10个信号都被不同线程的获取，但还没有释放，那么其它的20线程只能阻塞等待获取。
+
+注意：这里new Semaphore(10,boolean);有第二个参数，用于控制释放为公平，默认非公平效率高，但可能造成线程饥渴。
+
+```java
+public class SemaphoreTest {  
+  
+    private static final int THREAD_COUNT = 30;  
+  
+    private static ExecutorService threadPool = Executors  
+            .newFixedThreadPool(THREAD_COUNT);  
+  
+    private static final Semaphore s = new Semaphore(10);  // 创建信号量
+  
+    public static void main(String[] args) {  
+        for (int i = 0; i < THREAD_COUNT; i++) {  
+            final int num = i;  
+            threadPool.execute(new Runnable() {  
+                @Override  
+                public void run() {  
+                    try {  
+                        s.acquire();  // 获取授权，还可以使用tryAcquire()来尝试获取授权
+                        System.out.println(Thread.currentThread().getName()+"--save data--"+num);  
+                        
+                    } catch (InterruptedException e) {  
+                    } finally{
+                        s.release();  // 释放
+                    } 
+                }  
+            });  
+        }  
+  
+        threadPool.shutdown();  
+    }  
+} 
+```
+
+## ThreadPoolExecutor
+
+线程池用于降低资源消耗、提高响应速度、加强线程管理。
+
+
+
+### 构造方法
+
+```java
+    public ThreadPoolExecutor(int corePoolSize,
+                              int maximumPoolSize,
+                              long keepAliveTime,
+                              TimeUnit unit,
+                              BlockingQueue<Runnable> workQueue,
+                              ThreadFactory threadFactory,
+                              RejectedExecutionHandler handler) {
+    }
+```
+
+corePoolSize：核心线程池数量，如果当期运行的线程数少于corePoolSize，则创建新的线程来执行任务，并永久保持。
+
+workQueue：如果当期运行的线程数等于或多余corePoolSize，则将任务加入到workQueue（工作队列）。
+
+maximumPoolSize：如果无法将任务加入到workQueue（队列已满），则创建新的线程来处理任务，但必须在maximumPoolSize设定的最大线程数内。
+
+keepAliveTime：针对超出corePoolSize并在maximumPoolSize内的创建的线程，空闲多次时间后自动消耗。
+
+unit：设置keepAliveTime的数量单位。
+
+handler：饱和处理，如果线程数超出了maximumPoolSize数量限制，则由RejectedExecutionHandler的实现来处理。
+
+threadFactory：上面需要创建线程时调用本参数线程工厂来创建，例如：创建线程后为线程命名，设置线程属性等。
+
+
+
+workQueue参数队列类型：
+
+LinkedBlockingQueue（建议）：一个基于链表结构的阻塞有界队列，基于FIFO(先进先出)原则，一般情况下使用这个队列。
+
+SynchronousQueue：一个不存储元素的阻塞队列。每一个插入操作必须等另一个线程消费，否则插入操作处于阻塞状态。
+
+PriorityBlockingQueue：操作系统底层无法控制线程执行的优先级，但可以通过使用当前实现优先级的阻塞队列来实现优先级执行。
+
+
+
+handler参数类型：
+
+AbortPolicy（默认，建议）：直接抛出异常；
+
+CallerRunsPolicy：只用调用者所在的线程来运行任务；
+
+DiscardOldestPolicy：丢弃队列的最后一个任务，并执行当前任务；
+
+DiscardPolicy：不处理，直接丢弃；
+
+
+
+### 合理配置线程池
+
+CPU密集型：Ncpu+1
+
+IO密集型：2*Ncpu
+
+### 运行
+
+#### Runnable
+
+```java
+threadPool.execute(new Runnable(){
+    public void run(){
+        ...
+    }
+})
+```
+
+#### Callback
+
+```java
+Future<T> futrue = threadPool.submit(new Callable<T>(){
+    public T call(){
+        ...
+        return t;
+    }
+});
+T result = futrue.get();
+```
+
+### 关闭线程池
+
+threadPool.shutdown(); 关闭所有**等待执行**的线程(发生中断请求interrupt)；
+
+threadPool.shutdownNow(); 关闭所有**正在执行和等待执行**的线程(发生中断请求interrupt)；
+
+注意：如果线程无法响应中断，则可能永远无法终止线程执行；
+
+threadPool.isTerminaed()；判断所有的线程是否已经关闭成功；
+
+### 重要的属性和方法
+
+prestatAllCoreThread()，线程池启动后马上创建corePoolSize个线程(初始化核心线程)。
+
+
+
+## Executor框架
+
+jdk提供的基于ThreadPoolExecutor实现的线程服务框架，比ThreadPoolExecutor使用更加简单。
+
+
+
+### 创建固定数量线程池(FixedThreadPool)
+
+```java
+ExecutorService executorService = Executors.newFixedThreadPool(int nThreads);
+```
+
+### 创建单个线程池(SingeThreadPool)
+
+```java
+ExecutorService executorService = Executors.newSingeThreadPool();
+```
+
+### 创建无大小无界线程池(CachedThreadPool)
+
+**不建议使用**
+
+```java
+ExecutorService executorService = Executors.newCachedThreadPool();
+```
+
+### 创建基于计划任务的线程池(ScheduledThreadPool)
+
+```java
+ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(int corePoolSize)
+```
+ScheduledExecutorService接口调用方法
+
+```java
+    public ScheduledFuture<?> scheduleAtFixedRate(Runnable command,
+                                                  long initialDelay,
+                                                  long period,
+                                                  TimeUnit unit);
+```
+
+```java
+    public ScheduledFuture<?> scheduleWithFixedDelay(Runnable command,
+                                                     long initialDelay,
+                                                     long delay,
+                                                     TimeUnit unit);
+```
+
+scheduleAtFixedRate是用任务开始时间计算间隔，就是说某任务上次理论启动时间+间隔时间就是下次启动时间。
+scheduleWithFixedDelay（**建议使用**）是用任务结束时间计算间隔，就是说某任务上次结束时间+间隔时间就是下次启动时间。
+
+注意： 通过ScheduledExecutorService执行的周期任务，如果任务执行过程中抛出了异常，那么过ScheduledExecutorService就会停止执行任务，且也不会再周期地执行该任务了。所以你如果想保住任务都一直被周期执行，那么catch一切可能的异常。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
