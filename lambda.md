@@ -10,9 +10,23 @@
 
 单个参数和单语句写法
 
-```
+```java
 parameter -> statement
 ```
+
+无参数和单语句写入
+
+```java
+() -> statement
+```
+
+无参数和多语句写入
+
+```java
+() -> {statements;}
+```
+
+
 
 ## lambda注意
 
@@ -24,9 +38,7 @@ parameter -> statement
    forEach(nationality -> System.out.println("Found: " + nationality))
    ```
 
-   
-
-3. 表达式是一个闭包，定义了行内执行的方法类型接口；
+   表达式是一个闭包，定义了行内执行的方法类型接口；
 
 4. 只能引用标记了final的外层局部变量，不能在表达式内部修改定义在域外的局部变量，否则会编译错误；
 
@@ -80,21 +92,7 @@ x -> 2 * x
 
 ### lambda定义函数
 
-```java
-public class Java8Tester {
-    public static void main(String args[]) {
-        final int num = 1;
-        Converter<Integer, String> s = (param) -> System.out.println(String.valueOf(param + num));
-        s.convert(2);  // 输出结果为 3
-    }
- 
-    public interface Converter<T1, T2> {
-        void convert(int i);
-    }
-}
-```
-
-## 自定义一个函数
+**要求**
 
 接口有且仅有一个抽象方法
 
@@ -107,25 +105,44 @@ public class Java8Tester {
 该注解不是必须的，如果一个接口符合"函数式接口"定义，那么加不加该注解都没有影响。加上该注解能够更好地让编译器进行检查。如果编写的不是函数式接口，但是加上了@FunctionInterface，那么编译器会报错
 
 ```java
-// 正确的函数式接口
-@FunctionalInterface
-public interface TestInterface {
- 
-    
-    // 抽象方法
-    public void sub();
- 
-    // java.lang.Object中的方法不是抽象方法
-    public boolean equals(Object var1);
- 
-    // default不是抽象方法
-    public default void defaultMethod(){
- 
+	@FunctionalInterface
+    interface HelloWorld {
+        void print(String str);
+        // 默认(default)方法，只能通过接口的实现类来调用，不需要实现方法，也就是说接口的实现类可以继承或者重写默认方法。
+        default void print2(String message) {
+            System.out.println(message);
+        }
+        // 静态(static)方法只能通过接口名调用，不可以通过实现类的类名或者实现类的对象调用。就跟普通的静态类方法一样，通过方法所在的类直接调用。
+        static void print3(String message) {
+            System.out.println(message);
+        }
     }
- 
-    // static不是抽象方法
-    public static void staticMethod(){
- 
+
+```
+
+调用
+
+```java
+public class Test1 {
+
+	public static void main(String[] args) {
+		HelloWorld helloworld = (param) -> {System.out.println(param);};
+		helloworld.print("abstract method.");
+		helloworld.print2("default method");
+		HelloWorld.print3("static method");
+	}
+	
+	@FunctionalInterface
+    interface HelloWorld {
+        void print(String str);
+        // 默认(default)方法，只能通过接口的实现类来调用，不需要实现方法，也就是说接口的实现类可以继承或者重写默认方法。
+        default void print2(String message) {
+            System.out.println(message);
+        }
+        // 静态(static)方法只能通过接口名调用，不可以通过实现类的类名或者实现类的对象调用。就跟普通的静态类方法一样，通过方法所在的类直接调用。
+        static void print3(String message) {
+            System.out.println(message);
+        }
     }
 }
 
