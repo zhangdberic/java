@@ -1,3 +1,7 @@
+# 函数对象
+
+java1.8增加了函数接口(Function Interface)、Lambda、方法引用(method reference)，使的创建函数对象(function object)变得很容易。
+
 # lambda表达式
 
 ## lambda写法
@@ -26,7 +30,58 @@ parameter -> statement
 () -> {statements;}
 ```
 
+有返回值正确写法
 
+```java
+(a,b) -> a+b   // 注意：单行写法，不能加{}，也无需加return。
+(a,b) -> {return a+b;} // 多行写法，必须加{},必须加return和后面的;符合
+// 如果是单个参数
+a->a
+a->{return a;}    
+```
+
+例子:
+
+```java
+@SpringBootApplication
+public class Test {
+
+	public static void main(String[] args) {
+		a(Instant.now(), x -> Instant.now().isAfter(x));
+		b("123", x -> x.toLowerCase());
+	}
+	public static Boolean a(Instant i, Predicate<Instant> o) {
+		return o.test(i);
+	}
+
+	public static String b(String str, UnaryOperator<String> u) {
+		return u.apply(str);
+	}    
+```
+
+### 实现思路
+
+始终把函数接口，理解为接口，需要你实现的，只不过实现的方式可以有多种，1.直接java代码实现，2.lambda实现，3.方法引用实现。
+
+Lambda无法获取的对自身的引用。在Lambda中，关键字this是指外围实例。
+
+## lambda类型推导
+
+lambda表达式的参数类型一般是不需要声明类型的，编译器会根据上下来进行类型推导。但某些特殊情况下是无法确定类型，编译器会产生错误信息（无法推导类型）则需要手工指定参数类型，但这种情况比较少见。
+
+容器类型，例如：Collection、List等，不用使用原生类型，应该使用泛型(例如：List<String>)，这样能让编译器更准确的推导类型。
+
+## 什么情况使用lambda
+
+Lambda没有名称和文档；如果一个计算本身不是自描述的，或者超出了几行代码，那就不要把它放在Lambda中了。对应Lambda而言，一行是最理想的，三行是合理的最大极限。
+
+## lambda的限制
+
+1.lambda无法获取对自身的引用，在lambda中关键字this是指外围实例。如果需要使用this则不能使用lambda则应该改回使用匿名类。
+
+2.不序列化和反序列一个lambda函数。
+
+3.目前阶段(java1.8)，lambda只应用于小函数对象处理，不应使用函数编程。
 
 ## lambda注意
 
@@ -65,6 +120,21 @@ parameter -> statement
 
    ```java
    (int a, int b) -> { return a * b; };
+   ```
+
+6. 类型推导，编译器利用一个称为类型推导的过程，其会根据上下文来推导参数类型，因此想办法让编译器能指定更具体的类型信息，特别是涉及到类似于集合这样的容器类时，不要使用原生类型，而应该使用泛型类型，这样编译器能准确的进行类型推导，否则编译会错误。例如：
+
+   ```java
+   // 错误例子
+   @FunctionInterface
+   public interface ErrorSample {
+       void print(List list);
+   }
+   // 正确例子
+   @FunctionInterface
+   public interface OkSample {
+       void print(List<Object> list);
+   }
    ```
 
    
@@ -148,6 +218,14 @@ public class Test1 {
 
 ```
 
+## java.util.function预定义的函数接口
+
+DoubleBinaryOperator，表示一个带有两个double参数的函数，并返回一个double返回值。
+
+# 方法引用(method reference)
+
+Lambda的主要优势就在更简洁。Java提供了比Lambda更简洁函数对象的方法：方法引用。
+
 
 
 # stream
@@ -164,7 +242,7 @@ players.forEach(System.out::println);
 
 nations.stream()得到流式处理；
 
-filter((s) -> s.startsWith("A"))进行过滤处理，例如：字符串开通必须是字符A的；
+filter((s) -> s.startsWith("A"))进行过滤处理，例如：字符串开头必须是字符A；
 
 forEach(nationality -> System.out.println("Found: " + nationality));循环处理集合中的值；
 
