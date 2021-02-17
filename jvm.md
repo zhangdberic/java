@@ -129,7 +129,33 @@ YoungGC并不是说现有的Eden区放满了就会马上触发，G1会计算下�
 
 ------
 
+### G1 适用于
+
+如果你的JVM内存分配大于8G，则适合使用G1，否则还是使用CMS更好。因为本身G1的Region和卡表就不适合小堆内存。
+
 ### G1收集器参数
+
+#### 一般情况设置
+
+G1 本身适应性就很强，不需要过度的参数设置，一般情况下下面的jvm参数设计就可以了。
+
+-Xms4096m //最大堆设置
+
+-Xmx4096m //最小堆设置
+
+-XX:+UseG1GC //使用G1垃圾收集器
+
+-XX:MaxGCPauseMillis=50 //最大GC停顿时间(卡顿容忍时间)，默认是200ms，这里设置20ms
+
+-XX:+PrintGCDetails //打印GC详情日志
+
+-XX:+PrintStringTableStatistics //打印字符串常量、引用常量统计
+
+ -XX:+PrintSafepointStatistics //打印停顿原因
+
+-XX:+PrintGCApplicationStoppedTime //停顿时间输出到GC日志中
+
+#### 详细的参数说明
 
 - `-XX:+UseG1GC`:使用G1收集器
 - -`XX:ParallelGCThreads`:指定GC工作的线程数量
